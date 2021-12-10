@@ -220,7 +220,7 @@ return(list(together=together, brandproduct=brandproduct, website=website, model
 
 ```
 
-```{r Perfoming bootstraping for a consistent result}
+```{r Performing bootstraping for a consistent result}
 bootstrapping <- function(uitnormaal, seed=10){
 set.seed(seed)
 together <- uitnormaal$together
