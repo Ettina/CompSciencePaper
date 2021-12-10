@@ -1,0 +1,758 @@
+---
+title: "Code by Ettina Beiboer, used for the paper 'Duplicate Detection using Model Words, LSH and Hierarchical Complete-linkage Clustering'"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+```
+
+```{r Load data}
+setwd("/Users/ettinabeiboer/Computer Science")
+library(jsonlite)
+data <- fromJSON("TVs-all-merged.json", flatten=TRUE)
+
+dflist <- c()
+  for (i in 1:length(data)) {
+  dflist <- c(dflist, data[i])
+  }
+```
+
+```{r Making the product variables}
+beginning <- function(data){
+dflist <- c()
+  for (i in 1:length(data)) {
+  dflist <- c(dflist, data[i])
+  }
+
+namesfeatures <- c()
+for (i in 1:length(data)) {
+ if (dim(dflist[[i]])[1] == 1) {
+   namesfeatures <- c(namesfeatures, names(dflist[[i]][5:length(dflist[[i]])]))
+  } else if (dim(dflist[[i]])[1] == 2) {
+    for (k in 1:2){
+      namesfeatures <- c(namesfeatures, names(dflist[[i]][5:length(dflist[[i]])][k,]))
+    }
+  } else if (dim(dflist[[i]])[1] == 3) {
+    for (k in 1:3){
+      namesfeatures <- c(namesfeatures, names(dflist[[i]][5:length(dflist[[i]])][k,]))
+    }
+  }else if (dim(dflist[[i]])[1] == 4) {
+    for (k in 1:4){
+      namesfeatures <- c(namesfeatures, names(dflist[[i]][5:length(dflist[[i]])][k,]))
+    }
+  }
+}
+arranged <- table(namesfeatures) %>%  as.data.frame() %>% arrange(desc(Freq))
+wantedfeatures <- as.vector(arranged[1:29,1]) 
+
+featureslist <- c()
+for(i in 1:length(data)){
+ if (dim(dflist[[i]])[1] == 1) {
+    featureslist <- c(featureslist, paste(names(dflist[[i]][5:length(dflist[[i]])]), sep="", collapse = "#"))
+  } else if (dim(dflist[[i]])[1] == 2) {
+    featureslist <- c(featureslist, paste(names(dflist[[i]][5:length(dflist[[i]])][1]), sep="", collapse = "#"), paste(names(dflist[[i]][5:length(dflist[[i]])][2]), sep="", collapse = "#"))
+  } else if (dim(dflist[[i]])[1] == 3) {
+featureslist <- c(featureslist, paste(names(dflist[[i]][5:length(dflist[[i]])][1]), sep="", collapse = "#"), paste(names(dflist[[i]][5:length(dflist[[i]])][2]), sep="", collapse = "#"), paste(names(dflist[[i]][5:length(dflist[[i]])][3]), sep="", collapse = "#"))
+  } else if (dim(dflist[[i]])[1] == 4) {
+featureslist <- c(featureslist, paste(names(dflist[[i]][5:length(dflist[[i]])][1]), sep="", collapse = "#"), paste(names(dflist[[i]][5:length(dflist[[i]])][2]), sep="", collapse = "#"), paste(names(dflist[[i]][5:length(dflist[[i]])][3]), sep="", collapse = "#"), paste(names(dflist[[i]][5:length(dflist[[i]])][4]), sep="", collapse = "#"))
+    }
+}
+
+flist1 <- c()
+for (i in 1:length(featureslist)){
+  flist1 <- c(flist1,(strsplit(featureslist[i], "#")))
+}
+flist2 <- vector(mode="list", length=length(flist1))
+for (i in 1:length(flist1)){
+  for (j in 1:length(wantedfeatures)){
+    for (k in 1:length(flist1[[i]])){
+      if (flist1[[i]][k]==wantedfeatures[j]){
+        flist2[[i]][k] <- flist1[[i]][k]
+      }
+    }
+  }
+}
+flist3 <- vector(mode="list", length=length(flist1))
+for (i in 1:length(flist2)){
+  flist3[[i]] <- flist2[[i]][-which(is.na(flist2[[i]]))]
+}
+productenlijst <- c()
+for(i in 1:length(data)){
+ if (dim(dflist[[i]])[1] == 1) {
+    productenlijst <- c(productenlijst, paste(dflist[[i]][5:length(dflist[[i]])], sep="", collapse = "#"))
+  } else if (dim(dflist[[i]])[1] == 2) {
+    productenlijst <- c(productenlijst, paste(dflist[[i]][5:length(dflist[[i]])][1], sep="", collapse = "#"), paste(dflist[[i]][5:length(dflist[[i]])][2], sep="", collapse = "#"))
+  } else if (dim(dflist[[i]])[1] == 3) {
+productenlijst <- c(productenlijst, paste(dflist[[i]][5:length(dflist[[i]])][1], sep="", collapse = "#"), paste(dflist[[i]][5:length(dflist[[i]])][2], sep="", collapse = "#"), paste(dflist[[i]][5:length(dflist[[i]])][3], sep="", collapse = "#"))
+  } else if (dim(dflist[[i]])[1] == 4) {
+productenlijst <- c(productenlijst, paste(dflist[[i]][5:length(dflist[[i]])][1], sep="", collapse = "#"), paste(dflist[[i]][5:length(dflist[[i]])][2], sep="", collapse = "#"), paste(dflist[[i]][5:length(dflist[[i]])][3], sep="", collapse = "#"), paste(dflist[[i]][5:length(dflist[[i]])][4], sep="", collapse = "#"))
+    }
+}
+plist1 <- c()
+for (i in 1:length(productenlijst)){
+  plist1 <- c(plist1,(strsplit(productenlijst[i], "#")))
+}
+
+plist2 <- c()
+for (i in 1:length(plist1)){
+  plist2[[i]] <- plist1[[i]][which(!is.na(flist2[[i]]))]
+}
+
+keyvalue <- vector(mode="list", length=1624)
+for (i in 1:length(plist2)){
+  for (k in 1:length(plist2[[i]])){
+    keyvalue[[i]][k] <- paste(flist3[[i]][k],plist2[[i]][k], sep=" ")
+  }
+}
+
+kvlist <- kvlist1 <- kvlist2 <- kvlist3 <- kvlistminus <- c()
+for (i in 1:length(keyvalue)){
+  kvlist1[[i]] <- keyvalue[[i]][!keyvalue[[i]] %in% c("\\\\", '-', '/',  '\" ', ":","–")]
+  kvlist2[[i]] <- gsub("[()]", "", as.character(kvlist1[[i]]))
+  kvlist3[[i]] <- gsub(pattern = ('\"'), replacement="", x= as.character(kvlist2[[i]]))
+  kvlist[[i]] <- unique(toupper(kvlist3[[i]]))
+  kvlistminus[[i]] <- gsub("FEATURESMAP.", "", as.character(kvlist[[i]]))
+}
+
+brandlist <- unique(c("Zenith Radio","Xiaomi","Wybor","Witjas","Westinghouse", "Digital","Vu","Vizio","Videocon","Vestel","Veon","V WORLD","Trinium Electronics Philippines","TPV Technology","TP Vision","Thomson", "SA","Telefunken","Telebalt","Technisat","TCL","Tatung Company","Supra","Sparc","Sony","Soniq","Skyworth","Skywalker","Silo Digital","Shinco","Sharp","Seura","Seiki","Digital","Sanyo","Sansui","Samsung","Sampo Corp. of America","Salora","ProScan","Polar","Planar Systems","Pilot Radio","Philips","Pensonic","Panasonic","Onida","OnePlus","One", "Micromax","Metz","Memorex","Marantz","Linsar","LG Electronics","KTC","Konka","Kogan","Khind","Jensen Loudspeakers","IZUMI","Horizont","HKC","Hitachi","Hisense","Hesstar","Haier","GC","Funai","Fujitsu","FIRST","Element","Electron","Durabrand","Curtis Mathes Corporation","Compal Electronics","CloudWalker","Changhong",
+"CGE","Cenfonix","Cello Electronics","Cascade","Bush","Britannia","BPL india lmt","BLUE Edge","Baumann Meyer","Bang & Olufsen","AVEL","Atlantic","Asuka","Arise India","Arcam","Anitech","Alba","Akurra","Akari","Akai","Airis","Advent","Walton","INB","Haver Electric","Agath", "SUPERSONIC","NEC", "TOSHIBA","LG","COBY", "VIEWSONIC","INSIGNIA","NAXA","AVUE","SUNBRITETV","MAGNAVOX","JVC","OPTOMA","VENTURER","RCA","SCEPTRE","MITSUBISHI","DYNEX","SCEPTRE","PYLE", "ELO", "INSIGNIA\u0099", "DYNEX\u0099", "VIZIO,", "SUNBRITETV,", "ELITE", "VIORE", "AFFINITY", "SIGMAC", "GPX","HANNSPREE","EPSON", "CONTEX", "HP", "CURTISYOUNG", "HITEKER", "AZEND", "UPSTAR", "COMPAQ", "KITTY", "CRAIG"))
+brandlist <- toupper(brandlist)
+
+titlewords <- c()
+website <- c()
+for(i in 1:length(data)){
+ if (dim(dflist[[i]])[1] == 1) {
+    titlewords <- c(titlewords, dflist[[i]]$title[1])
+    website <- c(website, dflist[[i]]$shop[1])
+    
+  }
+  else if (dim(dflist[[i]])[1] == 2) {
+    titlewords <- c(titlewords, dflist[[i]]$title[1],dflist[[i]]$title[2])
+    website <- c(website, dflist[[i]]$shop[1], dflist[[i]]$shop[2])
+  }
+    else if (dim(dflist[[i]])[1] == 3) {
+    titlewords <- c(titlewords, dflist[[i]]$title[1],dflist[[i]]$title[2],dflist[[i]]$title[3])
+    website <- c(website, dflist[[i]]$shop[1], dflist[[i]]$shop[2], dflist[[i]]$shop[3])
+  }
+    else if (dim(dflist[[i]])[1] == 4) {
+    titlewords <- c(titlewords, dflist[[i]]$title[1],dflist[[i]]$title[2],dflist[[i]]$title[3], dflist[[i]]$title[4])
+    website <- c(website, dflist[[i]]$shop[1], dflist[[i]]$shop[2], dflist[[i]]$shop[3], dflist[[i]]$shop[4])
+    }
+}
+website <- toupper(website)
+
+modelwords <- c()
+for (i in 1:length(titlewords)){
+  modelwords <- c(modelwords, unlist(strsplit(titlewords[i], " +")))
+}
+
+modelwords1 <- modelwords[!modelwords %in% c("\\\\", '-', '/',  '\" ', ":","–")]
+modelwords2 <- gsub("[()]", "", as.character(modelwords1))
+modelwords3 <- gsub(pattern = ('\"'), replacement="", x= as.character(modelwords2))
+removethis <- c(brandlist, "TV", "NEWEGG.COM", "BEST","BUY", "THENERDS.NET", "TVS")
+modelwords4 <- modelwords3[! modelwords3 %in% removethis]
+modelwordsunique <- unique(toupper(modelwords4))
+
+titlesofproducts <- c()
+for (i in 1:length(data)) {
+  if (dim(dflist[[i]])[1] == 1) {
+    titlesofproducts <- c(titlesofproducts, dflist[[i]]$title[1])
+  }
+  else if (dim(dflist[[i]])[1] == 2) {
+    titlesofproducts <- c(titlesofproducts, dflist[[i]]$title[1], dflist[[i]]$title[2])
+  }
+    else if (dim(dflist[[i]])[1] == 3) {
+    titlesofproducts <- c(titlesofproducts, dflist[[i]]$title[1], dflist[[i]]$title[2], dflist[[i]]$title[3])
+  }
+    else if (dim(dflist[[i]])[1] == 4) {
+    titlesofproducts <- c(titlesofproducts, dflist[[i]]$title[1], dflist[[i]]$title[2], dflist[[i]]$title[3], dflist[[i]]$title[4])
+    }
+}
+
+splittingtitles <- list1 <- list2 <- list3 <- list4 <- c()
+for (i in 1:length(titlesofproducts)){
+  list1 <- c(list1,(strsplit(titlesofproducts[i], " +")))
+  list2[[i]] <- list1[[i]][!list1[[i]] %in% c("\\\\", '-', '/',  '\" ', ":","–")]
+  list3[[i]] <- gsub("[()]", "", as.character(list2[[i]]))
+  list4[[i]] <- gsub(pattern = ('\"'), replacement="", x= as.character(list3[[i]]))
+  splittingtitles[[i]] <- unique(toupper(list4[[i]]))
+}
+
+together <- vector(mode="list", length=length(splittingtitles))
+for (i in 1:length(splittingtitles)){
+  together[[i]] <- c(paste(c(kvlistminus[[i]], splittingtitles[[i]]), sep=""))
+}
+
+modelwordsfeatures <- c()
+for (i in 1:length(splittingtitles)){
+  modelwordsfeatures <- c(modelwordsfeatures, kvlistminus[[i]])
+}
+modelwordstogether <- c(modelwordsfeatures, modelwordsunique)
+modelwordstogetherunique <- unique(modelwordstogether)
+
+brandproduct <- c()
+for (i in 1:length(splittingtitles)){
+  for (j in 1:length(brandlist)){
+    for (k in 1:length(splittingtitles[[i]])) {
+        if (splittingtitles[[i]][k]==brandlist[j]){
+          brandproduct[i] <- brandlist[j]
+        }
+    }
+  }
+}
+
+modelids <- c()
+for(i in 1:length(dflist)){
+ if (dim(dflist[[i]])[1] == 1) {
+    modelids <- c(modelids, dflist[[i]]$modelID[1])
+  }  else if (dim(dflist[[i]])[1] == 2) {
+    modelids <- c(modelids, dflist[[i]]$modelID[1],dflist[[i]]$modelID[2])
+  }  else if (dim(dflist[[i]])[1] == 3) {
+    modelids <- c(modelids, dflist[[i]]$modelID[1],dflist[[i]]$modelID[2],dflist[[i]]$modelID[3])
+  }  else if (dim(dflist[[i]])[1] == 4) {
+    modelids <- c(modelids, dflist[[i]]$modelID[1],dflist[[i]]$modelID[2],dflist[[i]]$modelID[3], dflist[[i]]$modelID[4])
+    }
+}
+return(list(together=together, brandproduct=brandproduct, website=website, modelwordstogetherunique=modelwordstogetherunique, modelids=modelids))
+}
+
+```
+
+```{r Perfoming bootstraping for a consistent result}
+bootstrapping <- function(uitnormaal, seed=10){
+set.seed(seed)
+together <- uitnormaal$together
+brandproduct <- uitnormaal$brandproduct
+website <- uitnormaal$website
+modelwordstogetherunique <- uitnormaal$modelwordstogetherunique
+modelids <- uitnormaal$modelids
+
+allproducts <- 1:length(together)
+trainingproducts <- sample(floor(length(together)*0.63))
+testproducts <- allproducts[-trainingproducts]
+traintogether <- together[trainingproducts]
+testtogether <- together[testproducts]
+
+trainwebsite <- website[trainingproducts]
+testwebsite <- website[testproducts]
+
+trainbrandproduct<- brandproduct[trainingproducts]
+testbrandproduct <- brandproduct[testproducts]
+
+trainingmodelids <- modelids[trainingproducts]
+testmodelids <- modelids[testproducts]
+
+return(list(traintogether=traintogether, testtogether=testtogether, trainwebsite=trainwebsite, testwebsite=testwebsite, trainbrandproduct=trainbrandproduct, testbrandproduct=testbrandproduct, modelwordstogetherunique=modelwordstogetherunique, trainingmodelids=trainingmodelids, testmodelids=testmodelids))
+}
+```
+
+```{r Making the binary matrix and subsequently the signature matrix for the training data}
+signaturematrixtrain <- function(uitbootstrap, seed=16, rowsignature){
+together <- uitbootstrap$traintogether
+website <- uitbootstrap$trainwebsite
+brandproduct <- uitbootstrap$trainbrandproduct
+modelwordstogetherunique <- uitbootstrap$modelwordstogetherunique
+modelids <- uitbootstrap$trainingmodelids
+
+binarymatrix <- matrix(NA,length(together),length(modelwordstogetherunique))
+for (i in 1:length(together)) {
+  for (j in 1:length(modelwordstogetherunique))
+  binarymatrix[i,j] <- ifelse(sum(together[[i]]==modelwordstogetherunique[j])>0,1,0)
+}
+
+tmatrix <- t(binarymatrix)
+set.seed(seed)
+n <- rowsignature
+signaturematrix <- matrix(NA, nrow=n, ncol=dim(tmatrix)[2])
+data_row <- c() 
+for (i in 1:n){
+  data_row <- tmatrix[sample(1:nrow(tmatrix)),]
+  for (j in 1:dim(data_row)[2])
+  signaturematrix[i,j] <- match(1, data_row[,j])
+cat("Row", i,"is done", (n-i),"row(s) to go \n ")
+  }
+return(list(signaturematrix=signaturematrix, website=website, brandproduct=brandproduct, together=together, modelids=modelids))
+}
+```
+
+```{r Making the binary matrix and subsequently the signature matrix for the test data}
+signaturematrixtest <- function(uitbootstrap, seed=16, rowsignature){
+together <- uitbootstrap$testtogether
+website <- uitbootstrap$testwebsite
+brandproduct <- uitbootstrap$testbrandproduct
+modelwordstogetherunique <- uitbootstrap$modelwordstogetherunique
+modelids <- uitbootstrap$testmodelids
+
+binarymatrix <- matrix(NA,length(together),length(modelwordstogetherunique))
+for (i in 1:length(together)) {
+  for (j in 1:length(modelwordstogetherunique))
+  binarymatrix[i,j] <- ifelse(sum(together[[i]]==modelwordstogetherunique[j])>0,1,0)
+}
+
+tmatrix <- t(binarymatrix)
+set.seed(seed)
+n <- rowsignature
+signaturematrix <- matrix(NA, nrow=n, ncol=dim(tmatrix)[2])
+data_row <- c() 
+for (i in 1:n){
+  data_row <- tmatrix[sample(1:nrow(tmatrix)),]
+  for (j in 1:dim(data_row)[2])
+  signaturematrix[i,j] <- match(1, data_row[,j])
+cat("Row", i,"is done", (n-i),"row(s) to go \n ")
+  }
+return(list(signaturematrix=signaturematrix, website=website, brandproduct=brandproduct, together=together, modelids=modelids))
+}
+```
+
+```{r Making the dissimilarity matrix for the training data}
+dismaxtrain <- function(signaturematrixlist, rowsinband=10, infinity=3){
+  signaturematrix <- signaturematrixlist$signaturematrix
+  website <- signaturematrixlist$website
+  brandproduct <- signaturematrixlist$brandproduct
+  together <- signaturematrixlist$together
+  modelids <- signaturematrixlist$modelids
+  
+if ((dim(signaturematrix)[1]/rowsinband)%%1!=0){
+    cat("Error: Number of bands is not an integer \n")
+    break
+  }
+nbands <- dim(signaturematrix)[1]/rowsinband 
+nproducts <- dim(signaturematrix)[2]
+d <- split(signaturematrix, rep(1:nbands, each=rowsinband))
+bucketlist <- vector(mode="list", length=nbands)
+for (k in 1:nbands){
+  band <- matrix(d[[k]], nrow=rowsinband) # the band 
+  sm <- matrix(NA, nproducts, 1) # in this we put the 'names' of the columns in the band
+for (j in 1:nproducts){
+for (i in 1:rowsinband){
+  if (i==1){
+    sm[j,1] <- paste(band[i,j])
+  } else {
+  sm[j,1] <-paste(sm[j,1], band[i,j])
+    }
+}
+}
+uniquebuckets <- unique(sm)
+bucketmatrix <- matrix(NA, length(uniquebuckets), nproducts) 
+samebucket <- matrix(NA, length(uniquebuckets), nproducts)
+for (i in 1:length(uniquebuckets)){
+for (j in 1:nproducts){
+  bucketmatrix[i,j] <- ifelse(sm[j,1]==uniquebuckets[i],1,0) 
+  }
+}
+for (i in 1:length(uniquebuckets)){
+  samebucket[i,] <- c(which(bucketmatrix[i,]==1),rep(NA,length(which(!bucketmatrix[i,]==1))))
+  }
+maxin1bucket <- length(which(colSums(samebucket, na.rm=TRUE)!=0))
+hold <- which(!is.na(samebucket[,2])) 
+samebucketclean <- samebucket[hold,]
+bucketlist[[k]] <- samebucketclean[,1:maxin1bucket]
+cat("This was band",k,"of the signature matrix so",nbands-k,"band(s) to go \n")
+}
+
+infinity <- 3
+dismax <- matrix(infinity, nproducts, nproducts)
+for (m in 1:nproducts){ # products
+for (i in 1:nbands){ # bands
+    for (j in 1:dim(bucketlist[[i]])[1]){
+      for (k in 1:sum(ifelse(!is.na(bucketlist[[i]][j,]),1,0))){
+        if (bucketlist[[i]][j,k]==m){ 
+          for (l in 1:sum(ifelse(!is.na(bucketlist[[i]][j,]),1,0))){
+            dismax[m,bucketlist[[i]][j,l]] <- 1
+          }
+        }
+      }
+    }
+}
+  cat("Product", m,"for the dissimilarity matrix is done \n")
+}
+
+jaccard <- function(a, b) {
+    intersection <- length(intersect(a, b))
+    union <- length(a) + length(b) - intersection
+    return (intersection/union)
+}
+
+for (i in 1:(dim(dismax)[1])){
+  for (j in 1:(dim(dismax)[2])){
+    if (i==j){
+      dismax[i,j] <- infinity
+    } else if (website[i]==website[j]){
+      dismax[i,j] <- infinity
+      }
+  }
+}
+
+brandsdetected <- c(which(!is.na(brandproduct)))
+for (i in brandsdetected){
+  for (j in brandsdetected){
+    if (brandproduct[i]!=brandproduct[j]){
+      dismax[i,j] <- infinity
+    }
+  }
+}
+
+comparisons <- c()
+for (i in 1:(dim(dismax)[1])){
+  for (j in 1:(dim(dismax)[2])){
+    if (i<j){ 
+      if (dismax[i,j]==1){
+        comparisons <- c(comparisons, 1)
+      }
+      } else if (dismax[i,j]==1){
+      dismax[i,j] <- 1-jaccard(together[[i]],together[[j]])
+ }
+  }
+}
+numberofcomparisons <- length(comparisons)
+
+return(list(dismax=dismax, numberofcomparisons=numberofcomparisons, modelids=modelids))
+}
+```
+
+```{r Making the dissimilarity matrix for the test data}
+dismaxtest <- function(signaturematrixlist, rowsinband=10, infinity=3){
+  signaturematrix <- signaturematrixlist$signaturematrix
+  website <- signaturematrixlist$website
+  brandproduct <- signaturematrixlist$brandproduct
+  together <- signaturematrixlist$together
+  modelids <- signaturematrixlist$modelids
+  
+if ((dim(signaturematrix)[1]/rowsinband)%%1!=0){
+    cat("Error: Number of bands is not an integer \n")
+    break
+  }
+nbands <- dim(signaturematrix)[1]/rowsinband 
+nproducts <- dim(signaturematrix)[2]
+d <- split(signaturematrix, rep(1:nbands, each=rowsinband))
+bucketlist <- vector(mode="list", length=nbands)
+for (k in 1:nbands){
+  band <- matrix(d[[k]], nrow=rowsinband) # the band 
+  sm <- matrix(NA, nproducts, 1) # in this we put the 'names' of the columns in the band
+for (j in 1:nproducts){
+for (i in 1:rowsinband){
+  if (i==1){
+    sm[j,1] <- paste(band[i,j])
+  } else {
+  sm[j,1] <-paste(sm[j,1], band[i,j])
+    }
+}
+}
+uniquebuckets <- unique(sm)
+bucketmatrix <- matrix(NA, length(uniquebuckets), nproducts) 
+samebucket <- matrix(NA, length(uniquebuckets), nproducts)
+for (i in 1:length(uniquebuckets)){
+for (j in 1:nproducts){
+  bucketmatrix[i,j] <- ifelse(sm[j,1]==uniquebuckets[i],1,0) 
+  }
+}
+for (i in 1:length(uniquebuckets)){
+  samebucket[i,] <- c(which(bucketmatrix[i,]==1),rep(NA,length(which(!bucketmatrix[i,]==1))))
+  }
+maxin1bucket <- length(which(colSums(samebucket, na.rm=TRUE)!=0))
+hold <- which(!is.na(samebucket[,2])) 
+samebucketclean <- samebucket[hold,]
+bucketlist[[k]] <- samebucketclean[,1:maxin1bucket]
+cat("This was band",k,"of the signature matrix so",nbands-k,"band(s) to go \n")
+}
+
+infinity <- 3
+dismax <- matrix(infinity, nproducts, nproducts)
+for (m in 1:nproducts){ # products
+for (i in 1:nbands){ # bands
+    for (j in 1:dim(bucketlist[[i]])[1]){
+      for (k in 1:sum(ifelse(!is.na(bucketlist[[i]][j,]),1,0))){
+        if (bucketlist[[i]][j,k]==m){ 
+          for (l in 1:sum(ifelse(!is.na(bucketlist[[i]][j,]),1,0))){
+            dismax[m,bucketlist[[i]][j,l]] <- 1
+          }
+        }
+      }
+    }
+}
+  cat("Product", m,"for the dissimilarity matrix is done \n")
+}
+
+jaccard <- function(a, b) {
+    intersection <- length(intersect(a, b))
+    union <- length(a) + length(b) - intersection
+    return (intersection/union)
+}
+
+for (i in 1:(dim(dismax)[1])){
+  for (j in 1:(dim(dismax)[2])){
+    if (i==j){
+      dismax[i,j] <- infinity
+    } else if (website[i]==website[j]){
+      dismax[i,j] <- infinity
+      }
+  }
+}
+
+brandsdetected <- c(which(!is.na(brandproduct)))
+for (i in brandsdetected){
+  for (j in brandsdetected){
+    if (brandproduct[i]!=brandproduct[j]){
+      dismax[i,j] <- infinity
+    }
+  }
+}
+
+comparisons <- c()
+for (i in 1:(dim(dismax)[1])){
+  for (j in 1:(dim(dismax)[2])){
+    if (i<j){ 
+      if (dismax[i,j]==1){
+        comparisons <- c(comparisons, 1)
+      }
+      } else if (dismax[i,j]==1){
+      dismax[i,j] <- 1-jaccard(together[[i]],together[[j]])
+ }
+  }
+}
+numberofcomparisons <- length(comparisons)
+
+return(list(dismax=dismax, numberofcomparisons=numberofcomparisons, modelids=modelids))
+}
+```
+
+```{r Hierarchical Complete-Linkage Clustering on the training data}
+clusterstrain <- function(dismaxlist, epsilon){
+dismax <- dismaxlist$dismax
+ncomparisons <- dismaxlist$numberofcomparisons
+modelids <- dismaxlist$modelids
+
+distdismax <- as.dist(dismax)
+hclustdismax <- hclust(distdismax, method="complete")
+cutreedismax <- cutree(hclustdismax, h=epsilon)
+dismaxdupl <- cutreedismax[duplicated(cutreedismax)]
+dismaxclusters <- vector(mode="list", length=length(dismaxdupl))
+for (i in 1:length(dismaxclusters)){
+  dismaxclusters[[i]] <- which(cutreedismax %in%  dismaxdupl[i])
+}
+finalclusters <- unique(dismaxclusters)
+
+realduplicates <- matrix(NA, nrow=length(modelids), ncol = length(modelids))
+for (i in 1:length(modelids)){
+  for (j in 1:length(modelids)){
+  if (modelids[[i]]==modelids[[j]]){
+    if (i<j){
+    realduplicates[i,j] <- 1
+    }
+  }
+}
+}
+
+TD <- sum(rowSums(realduplicates, na.rm=TRUE))
+TPl <- c()
+FPl <- c()
+for (i in 1:length(finalclusters)){
+  if (length(finalclusters[[i]])==2){
+    if (modelids[finalclusters[[i]]][1]==modelids[finalclusters[[i]]][2]){
+        TPl <- c(TPl, 1) 
+    } else if (modelids[finalclusters[[i]]][1]!=modelids[finalclusters[[i]]][2]){
+        FPl <- c(FPl, 1)
+      }
+  }
+    if (length(finalclusters[[i]])==3){
+      if (modelids[finalclusters[[i]]][1]==modelids[finalclusters[[i]]][2]){
+        TPl <- c(TPl, 1) 
+    } else if (modelids[finalclusters[[i]]][1]!=modelids[finalclusters[[i]]][2]){
+        FPl <- c(FPl, 1)
+    }
+   if (modelids[finalclusters[[i]]][1]==modelids[finalclusters[[i]]][3]){
+        TPl <- c(TPl, 1) 
+    } else if (modelids[finalclusters[[i]]][1]!=modelids[finalclusters[[i]]][3]){
+        FPl <- c(FPl, 1)
+    }
+    if (modelids[finalclusters[[i]]][2]==modelids[finalclusters[[i]]][3]){
+        TPl <- c(TPl, 1) 
+    } else if (modelids[finalclusters[[i]]][2]!=modelids[finalclusters[[i]]][3]){
+        FPl <- c(FPl, 1)
+    }
+    }
+}
+TP <- length(TPl)
+FP <- length(FPl)
+precision <- TP / (TP + FP)
+FN <- TD - TP
+recall <- TP / (TP+FN)
+F1 <- 2*(precision*recall)/(precision+recall)
+pairquality <- TP/ncomparisons
+paircompleteness <-TP/TD
+F1star <- 2*(pairquality*paircompleteness)/(pairquality+paircompleteness)
+fractionofcomparisonstrain <- ncomparisons/((1023*1022)/2)
+return(list(cluster=finalclusters, F1=F1, F1star=F1star, precision=precision, recall=recall, pairquality=pairquality, paircompleteness=paircompleteness, foc=fractionofcomparisons, foctrain=fractionofcomparisonstrain))
+}
+```
+
+```{r Hierarchical Complete-Linkage Clustering on the test data}
+clusterstest <- function(dismaxlist, epsilon){
+dismax <- dismaxlist$dismax
+ncomparisons <- dismaxlist$numberofcomparisons
+modelids <- dismaxlist$modelids
+
+distdismax <- as.dist(dismax)
+hclustdismax <- hclust(distdismax, method="complete")
+cutreedismax <- cutree(hclustdismax, h=epsilon)
+dismaxdupl <- cutreedismax[duplicated(cutreedismax)]
+dismaxclusters <- vector(mode="list", length=length(dismaxdupl))
+for (i in 1:length(dismaxclusters)){
+  dismaxclusters[[i]] <- which(cutreedismax %in%  dismaxdupl[i])
+}
+finalclusters <- unique(dismaxclusters)
+
+realduplicates <- matrix(NA, nrow=length(modelids), ncol = length(modelids))
+for (i in 1:length(modelids)){
+  for (j in 1:length(modelids)){
+  if (modelids[[i]]==modelids[[j]]){
+    if (i<j){
+    realduplicates[i,j] <- 1
+    }
+  }
+}
+}
+
+TD <- sum(rowSums(realduplicates, na.rm=TRUE))
+TPl <- c()
+FPl <- c()
+for (i in 1:length(finalclusters)){
+  if (length(finalclusters[[i]])==2){
+    if (modelids[finalclusters[[i]]][1]==modelids[finalclusters[[i]]][2]){
+        TPl <- c(TPl, 1) 
+    } else if (modelids[finalclusters[[i]]][1]!=modelids[finalclusters[[i]]][2]){
+        FPl <- c(FPl, 1)
+      }
+  }
+    if (length(finalclusters[[i]])==3){
+      if (modelids[finalclusters[[i]]][1]==modelids[finalclusters[[i]]][2]){
+        TPl <- c(TPl, 1) 
+    } else if (modelids[finalclusters[[i]]][1]!=modelids[finalclusters[[i]]][2]){
+        FPl <- c(FPl, 1)
+    }
+   if (modelids[finalclusters[[i]]][1]==modelids[finalclusters[[i]]][3]){
+        TPl <- c(TPl, 1) 
+    } else if (modelids[finalclusters[[i]]][1]!=modelids[finalclusters[[i]]][3]){
+        FPl <- c(FPl, 1)
+    }
+    if (modelids[finalclusters[[i]]][2]==modelids[finalclusters[[i]]][3]){
+        TPl <- c(TPl, 1) 
+    } else if (modelids[finalclusters[[i]]][2]!=modelids[finalclusters[[i]]][3]){
+        FPl <- c(FPl, 1)
+    }
+    }
+}
+TP <- length(TPl)
+FP <- length(FPl)
+precision <- TP / (TP + FP)
+FN <- TD - TP
+recall <- TP / (TP+FN)
+F1 <- 2*(precision*recall)/(precision+recall)
+pairquality <- TP/ncomparisons
+paircompleteness <-TP/TD
+F1star <- 2*(pairquality*paircompleteness)/(pairquality+paircompleteness)
+return(list(cluster=finalclusters, F1=F1, F1star=F1star))
+}
+```
+
+```{r Function for perfoming five bootstraps for different values of n, r and epsilon}
+uitnormaal <- beginning(data) # the first step is the same for all bootstraps
+tfunction <- function(n,r,eps=0.8){
+# Bootstrap 1
+uitbootstrap1 <- bootstrapping(uitnormaal, seed=1)
+signaturematrixlist1 <- signaturematrixtrain(uitbootstrap1, rowsignature = n)
+dismaxlist1 <- dismaxtrain(signaturematrixlist1, rowsinband = r)
+ct1 <- clusterstrain(dismaxlist1, epsilon=eps)
+
+signaturematrixlist1test <- signaturematrixtest(uitbootstrap1, rowsignature = n)
+dismaxlist1test <- dismaxtest(signaturematrixlist1test, rowsinband = r)
+ct1test <- clusterstest(dismaxlist1test, epsilon=eps)
+
+# Bootstrap 2
+uitbootstrap2 <- bootstrapping(uitnormaal, seed=2)
+signaturematrixlist2 <- signaturematrixtrain(uitbootstrap2, rowsignature = n)
+dismaxlist2 <- dismaxtrain(signaturematrixlist2, rowsinband = r)
+ct2 <- clusterstrain(dismaxlist2, epsilon=eps)
+
+signaturematrixlist2test <- signaturematrixtest(uitbootstrap2, rowsignature = n)
+dismaxlist2test <- dismaxtest(signaturematrixlist2test, rowsinband = r)
+ct2test <- clusterstest(dismaxlist2test, epsilon=eps)
+
+# Bootstrap 3
+uitbootstrap3 <- bootstrapping(uitnormaal, seed=3)
+signaturematrixlist3 <- signaturematrixtrain(uitbootstrap3, rowsignature = n)
+dismaxlist3 <- dismaxtrain(signaturematrixlist3, rowsinband = r)
+ct3 <- clusterstrain(dismaxlist3, epsilon=eps)
+
+signaturematrixlist3test <- signaturematrixtest(uitbootstrap3, rowsignature = n)
+dismaxlist3test <- dismaxtest(signaturematrixlist3test, rowsinband = r)
+ct3test <- clusterstest(dismaxlist3test, epsilon=eps)
+
+# Bootstrap 4
+uitbootstrap4 <- bootstrapping(uitnormaal, seed=4)
+signaturematrixlist4 <- signaturematrixtrain(uitbootstrap4, rowsignature = n)
+dismaxlist4 <- dismaxtrain(signaturematrixlist4, rowsinband = r)
+ct4 <- clusterstrain(dismaxlist4, epsilon=eps)
+
+signaturematrixlist4test <- signaturematrixtest(uitbootstrap4, rowsignature = n)
+dismaxlist4test <- dismaxtest(signaturematrixlist4test, rowsinband = r)
+ct4test <- clusterstest(dismaxlist4test, epsilon=eps)
+
+# Bootstrap 5
+uitbootstrap5 <- bootstrapping(uitnormaal, seed=5)
+signaturematrixlist5 <- signaturematrixtrain(uitbootstrap5, rowsignature = n)
+dismaxlist5 <- dismaxtrain(signaturematrixlist5, rowsinband = r)
+ct5 <- clusterstrain(dismaxlist5, epsilon=eps)
+
+signaturematrixlist5test <- signaturematrixtest(uitbootstrap5, rowsignature = n)
+dismaxlist5test <- dismaxtest(signaturematrixlist5test, rowsinband = r)
+ct5test <- clusterstest(dismaxlist5test, epsilon=eps)
+
+f1s <- c(ct1$F1,ct2$F1,ct3$F1,ct4$F1,ct5$F1)
+f1stars <- c(ct1$F1star,ct2$F1star,ct3$F1star,ct4$F1star,ct5$F1star)
+precisions <- c(ct1$precision,ct2$precision,ct3$precision,ct4$precision,ct5$precision)
+recalls <- c(ct1$recall,ct2$recall,ct3$recall,ct4$recall,ct5$recall)
+pairqualitys <- c(ct1$pairquality,ct2$pairquality,ct3$pairquality,ct4$pairquality,ct5$pairquality)
+paircompletenesss <- c(ct1$paircompleteness,ct2$paircompleteness,ct3$paircompleteness,ct4$paircompleteness,ct5$paircompleteness)
+foctrain <- c(ct1$foctrain,ct2$foctrain,ct3$foctrain,ct4$foctrain,ct5$foctrain)
+
+f1stest <- c(ct1test$F1,ct2test$F1,ct3test$F1,ct4test$F1,ct5test$F1)
+f1starstest <- c(ct1test$F1star,ct2test$F1star,ct3test$F1star,ct4test$F1star,ct5test$F1star)
+precisionstest <- c(ct1test$precision,ct2test$precision,ct3test$precision,ct4test$precision,ct5test$precision)
+recallstest <- c(ct1test$recall,ct2test$recall,ct3test$recall,ct4test$recall,ct5test$recall)
+pairqualitystest <- c(ct1test$pairquality,ct2test$pairquality,ct3test$pairquality,ct4test$pairquality,ct5test$pairquality)
+paircompletenessstest <- c(ct1test$paircompleteness,ct2test$paircompleteness,ct3test$paircompleteness,ct4test$paircompleteness,ct5test$paircompleteness)
+foctest <- c(ct1test$foc,ct2test$foc,ct3test$foc,ct4test$foc,ct5test$foc)
+
+f1mean <- mean(f1s)
+f1starmean <- mean(f1stars)
+precisionmean <- mean(precisions)
+recallmean <- mean(recalls)
+pairqualitymean <- mean(pairqualitys)
+paircompletenessmean <- mean(paircompletenesss)
+focmeantrain <- mean(foctrain)
+
+return(list(f1mean=f1mean, f1starmean=f1starmean, precisionmean=precisionmean, recallmean=recallmean, pairqualitymean=pairqualitymean, paircompletenessmean=paircompletenessmean, focmeantrain=focmeantrain))
+}
+```
+
+```{r Performing the algorithm for different values of threshold t}
+t0.05 <- tfunction(762, 2)
+t0.10 <- tfunction(200, 2)
+t0.15 <- tfunction(801, 3)
+t0.20 <- tfunction(348, 3)
+t0.25 <- tfunction(201, 3)
+t0.30 <- tfunction(448, 4)
+t0.35 <- tfunction(224, 4)
+t0.40 <- tfunction(435, 5)
+t0.45 <- tfunction(240, 5)
+t0.50 <- tfunction(330, 6)
+t0.55 <- tfunction(204, 6)
+t0.60 <- tfunction(210, 7)
+t0.65 <- tfunction(208, 8)
+t0.70 <- tfunction(207, 9)
+t0.75 <- tfunction(209, 11)
+t0.80 <- tfunction(208, 13)
+```
